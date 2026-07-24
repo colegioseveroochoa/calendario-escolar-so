@@ -9,6 +9,13 @@
   <style>
     body { font-family: 'DM Sans', sans-serif; }
     .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+    @media print {
+      body > header, body > main { display:none !important; }
+      .no-print { display:none !important; }
+      #preview-modal, #full-preview-modal { position:static !important; background:none !important; padding:0 !important; inset:auto !important; }
+      #preview-modal > div, #full-preview-modal > div { box-shadow:none !important; max-height:none !important; overflow:visible !important; max-width:100% !important; width:100% !important; }
+      #preview-content, #full-preview-content { overflow:visible !important; }
+    }
   </style>
  </head>
  <body class="w-full min-h-screen p-4 md:p-6" style="background: rgb(248, 249, 250);">
@@ -33,7 +40,11 @@
   <div id="preview-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
    <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
     <div class="sticky top-0 bg-white border-b flex items-center justify-between p-4">
-     <h2 id="preview-title" class="text-xl font-bold"></h2><button id="close-preview" class="p-2 rounded-lg" style="background-color:#001a72;color:white;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+     <h2 id="preview-title" class="text-xl font-bold"></h2>
+     <div class="flex items-center gap-2 no-print">
+      <button id="pdf-preview-btn" class="p-2 rounded-lg" style="background-color:#059669;color:white;" title="Guardar como PDF"><i data-lucide="printer" style="width:20px;height:20px;"></i></button>
+      <button id="close-preview" class="p-2 rounded-lg" style="background-color:#001a72;color:white;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+     </div>
     </div>
     <div id="preview-content" class="p-6"></div>
    </div>
@@ -41,7 +52,11 @@
   <div id="full-preview-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
    <div class="bg-white rounded-lg shadow-2xl w-full max-w-6xl h-full max-h-[95vh] flex flex-col">
     <div class="sticky top-0 bg-white border-b flex items-center justify-between p-4">
-     <h2 class="text-xl font-bold">Vista Completa del Calendario</h2><button id="close-full-preview" class="p-2 rounded-lg" style="background-color:#001a72;color:white;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+     <h2 class="text-xl font-bold">Vista Completa del Calendario</h2>
+     <div class="flex items-center gap-2 no-print">
+      <button id="pdf-full-btn" class="p-2 rounded-lg" style="background-color:#059669;color:white;" title="Guardar como PDF"><i data-lucide="printer" style="width:20px;height:20px;"></i></button>
+      <button id="close-full-preview" class="p-2 rounded-lg" style="background-color:#001a72;color:white;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+     </div>
     </div>
     <div id="full-preview-content" class="flex-1 overflow-y-auto p-8"></div>
    </div>
@@ -274,7 +289,7 @@
     function openPreview(m,y){
       const p=monthColors[m],total=daysInMonth(y,m);
       document.getElementById('preview-title').textContent=`${MESES[m]} ${y}`;
-      let h=`<table class="w-full border-collapse text-sm"><thead><tr style="background:${p.bg}"><th class="border px-3 py-2 text-left" style="color:${p.fg}">Fecha</th><th class="border px-3 py-2" style="color:${p.fg}">Slot 1</th><th class="border px-3 py-2" style="color:${p.fg}">Slot 2</th><th class="border px-3 py-2" style="color:${p.fg}">Slot 3</th></tr></thead><tbody>`;
+      let h=`<table class="w-full border-collapse text-sm"><thead><tr style="background:${p.bg}"><th class="border px-3 py-2 text-left" style="color:${p.fg}">Fecha</th><th class="border px-3 py-2" style="color:${p.fg}"></th><th class="border px-3 py-2" style="color:${p.fg}"></th><th class="border px-3 py-2" style="color:${p.fg}"></th></tr></thead><tbody>`;
       for(let d=1;d<=total;d++){
         const k=dayKey(y,m,d),entries=dayEntries[k]||['','','',false],fest=!!entries[3];
         const hasText=(entries[0]&&entries[0].trim())||(entries[1]&&entries[1].trim())||(entries[2]&&entries[2].trim());
@@ -321,6 +336,8 @@
     document.getElementById('year-input').addEventListener('change',render);
     document.getElementById('month-input').addEventListener('change',render);
     document.getElementById('lock-btn').addEventListener('click',tryUnlock);
+    document.getElementById('pdf-preview-btn').addEventListener('click',()=>window.print());
+    document.getElementById('pdf-full-btn').addEventListener('click',()=>window.print());
 
     updateEditUI();
     loadData();
