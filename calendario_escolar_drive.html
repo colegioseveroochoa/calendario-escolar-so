@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="es"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendario Anual</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&amp;display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <style>
+    body { font-family: 'DM Sans', sans-serif; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+  </style>
+ </head>
+ <body class="w-full min-h-screen p-4 md:p-6" style="background: rgb(248, 249, 250);">
+  <header class="max-w-7xl mx-auto mb-6 flex items-center justify-between gap-4 flex-wrap">
+   <h1 class="canva-text font-bold" style="color: rgb(0, 26, 114); font-weight: 700; font-style: normal; font-size: 21px;">Calendario Escolar: Curso 2026/2027<br>Cooperativa de Enseñanza Severo Ochoa</h1>
+   <div class="flex items-center gap-3 flex-wrap">
+    <div class="flex items-center gap-2">
+     <label for="year-input" class="text-sm font-medium text-gray-700">Año:</label><input id="year-input" type="number" value="2026" min="1900" max="2100" disabled class="w-20 px-3 py-1.5 text-sm font-bold text-center border-2 border-gray-300 rounded-lg bg-gray-100 text-gray-800">
+    </div>
+    <div class="flex items-center gap-2">
+     <label for="month-input" class="text-sm font-medium text-gray-700">Mes inicio:</label><select id="month-input" disabled class="px-3 py-1.5 text-sm font-medium border-2 border-gray-300 rounded-lg bg-gray-100 text-gray-800"><option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option><option value="3">Abril</option><option value="4">Mayo</option><option value="5">Junio</option><option value="6">Julio</option><option value="7">Agosto</option><option value="8" selected="">Septiembre</option><option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option></select>
+    </div><button id="full-preview-btn" class="px-4 py-1.5 text-sm font-medium rounded-lg transition" style="background-color:#001a72;color:white;">Vista Completa</button>
+    <button id="lock-btn" class="px-4 py-1.5 text-sm font-medium rounded-lg transition border-2" style="border-color:#001a72;color:#001a72;background:white;">🔒 Editar</button>
+   </div>
+   <div class="flex items-center gap-2">
+    <span id="save-indicator" class="text-xs text-green-600 font-medium hidden">✓ Guardado</span>
+    <span id="load-indicator" class="text-xs text-gray-500 font-medium">Cargando datos…</span>
+    <span id="error-indicator" class="text-xs text-red-600 font-medium hidden">⚠ Error al conectar con la hoja</span>
+   </div>
+  </header>
+  <main id="calendar-container" class="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></main>
+  <div id="preview-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+   <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div class="sticky top-0 bg-white border-b flex items-center justify-between p-4">
+     <h2 id="preview-title" class="text-xl font-bold"></h2><button id="close-preview" class="p-2 rounded-lg" style="background-color:#001a72;color:white;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+    </div>
+    <div id="preview-content" class="p-6"></div>
+   </div>
+  </div>
+  <div id="full-preview-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+   <div class="bg-white rounded-lg shadow-2xl w-full max-w-6xl h-full max-h-[95vh] flex flex-col">
+    <div class="sticky top-0 bg-white border-b flex items-center justify-between p-4">
+     <h2 class="text-xl font-bold">Vista Completa del Calendario</h2><button id="close-full-preview" class="p-2 rounded-lg" style="background-color:#001a72;color:white;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+    </div>
+    <div id="full-preview-content" class="flex-1 overflow-y-auto p-8"></div>
+   </div>
+  </div>
+  <script>
+    // ==== CONEXIÓN CON GOOGLE SHEETS (Apps Script) ====
+    const API_URL = 'https://script.google.com/a/macros/colegioseveroochoa.es/s/AKfycbzbWdAkCttqP-m8J3Mwx1dY0JpTqj12Yd3Rj5o3HRJ2_qeoDEkZeMHxEESwrnG-ZMsM/exec';
+
+    const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+    const DIAS=["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+    const DIAS_FULL=["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+    const monthColors={0:{bg:"#f4c6ac",fg:"#8f5f3f"},1:{bg:"#fcffae",fg:"#7f7f2f"},2:{bg:"#96f099",fg:"#2d5f31"},3:{bg:"#aeeae8",fg:"#2d6f6f"},4:{bg:"#c2b3f4",fg:"#5f3f8f"},5:{bg:"#f1bada",fg:"#8f3f5f"},6:{bg:"#f4c6ac",fg:"#8f5f3f"},7:{bg:"#fcffae",fg:"#7f7f2f"},8:{bg:"#96f099",fg:"#2d5f31"},9:{bg:"#aeeae8",fg:"#2d6f6f"},10:{bg:"#c2b3f4",fg:"#5f3f8f"},11:{bg:"#f1bada",fg:"#8f3f5f"}};
+
+    let dayEntries={};
+    const saveTimers={};
+    let editUnlocked=false;
+    let editToken=null;
+
+    function updateEditUI(){
+      const yearInp=document.getElementById('year-input');
+      const monthInp=document.getElementById('month-input');
+      const lockBtn=document.getElementById('lock-btn');
+      yearInp.disabled=!editUnlocked;
+      monthInp.disabled=!editUnlocked;
+      yearInp.classList.toggle('bg-gray-100',!editUnlocked);
+      yearInp.classList.toggle('bg-white',editUnlocked);
+      monthInp.classList.toggle('bg-gray-100',!editUnlocked);
+      monthInp.classList.toggle('bg-white',editUnlocked);
+      if(editUnlocked){
+        lockBtn.textContent='🔓 Modo edición activo';
+        lockBtn.style.background='#001a72';
+        lockBtn.style.color='white';
+      }else{
+        lockBtn.textContent='🔒 Editar';
+        lockBtn.style.background='white';
+        lockBtn.style.color='#001a72';
+      }
+    }
+
+    async function tryUnlock(){
+      if(editUnlocked)return;
+      const pass=prompt('Introduce la contraseña de edición:');
+      if(pass==null||pass==='')return;
+      try{
+        const res=await fetch(API_URL,{
+          method:'POST',
+          headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body:JSON.stringify({action:'verify',token:pass})
+        });
+        const data=await res.json();
+        if(data.ok){
+          editUnlocked=true;
+          editToken=pass;
+          sessionStorage.setItem('calEditToken',pass);
+          updateEditUI();
+          render();
+        }else{
+          alert('Contraseña incorrecta.');
+        }
+      }catch(err){
+        console.error('Error verificando contraseña:',err);
+        alert('No se pudo comprobar la contraseña. Revisa tu conexión.');
+      }
+    }
+
+    async function tryRestoreSession(){
+      const saved=sessionStorage.getItem('calEditToken');
+      if(!saved)return;
+      try{
+        const res=await fetch(API_URL,{
+          method:'POST',
+          headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body:JSON.stringify({action:'verify',token:saved})
+        });
+        const data=await res.json();
+        if(data.ok){editUnlocked=true;editToken=saved;updateEditUI();render();}
+        else{sessionStorage.removeItem('calEditToken');}
+      }catch(err){/* si falla, se queda en modo lectura */}
+    }
+
+    function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
+    function dayOfWeek(y,m,d){return(new Date(y,m,d).getDay()+6)%7;}
+    function dayKey(y,m,d){return `${y}/${m}/${d}`;}
+    function hasContent(k){const e=dayEntries[k];if(!e)return false;return !!((e[0]&&e[0].trim()!=='')||(e[1]&&e[1].trim()!=='')||(e[2]&&e[2].trim()!==''));}
+    function isFestivo(k){const e=dayEntries[k];return !!(e&&e[3]);}
+    const FESTIVO_BG='#fca5a5', FESTIVO_FG='#7f1d1d';
+    function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+
+    function showSaved(){const el=document.getElementById('save-indicator');el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),1500);}
+    function showError(msg){const el=document.getElementById('error-indicator');el.textContent='⚠ '+msg;el.classList.remove('hidden');}
+    function hideLoading(){document.getElementById('load-indicator').classList.add('hidden');}
+
+    function normalizeDayKey(raw){
+      if(raw==null) return null;
+      const s=String(raw).trim();
+      let m=s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+      if(m) return `${+m[1]}/${+m[2]}/${+m[3]}`;
+      m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if(m) return `${+m[1]}/${+m[2]-1}/${+m[3]}`;
+      const d=new Date(s);
+      if(!isNaN(d)) return `${d.getFullYear()}/${d.getMonth()}/${d.getDate()}`;
+      return null;
+    }
+
+    async function loadData(){
+      try{
+        const res=await fetch(API_URL,{method:'GET'});
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        const records=await res.json();
+        const newEntries={};
+        records.forEach(rec=>{
+          const k=normalizeDayKey(rec.day_key);
+          if(k) newEntries[k]=[rec.slot0||'',rec.slot1||'',rec.slot2||'',rec.festivo==='SI'];
+        });
+        dayEntries=newEntries;
+        hideLoading();
+        render();
+      }catch(err){
+        console.error('Error cargando datos:',err);
+        hideLoading();
+        showError('No se pudieron cargar los datos');
+        render();
+      }
+    }
+
+    async function saveEntry(k){
+      if(!editUnlocked)return; // salvaguarda extra: sin desbloquear, no se envía nada
+      const entries=dayEntries[k]||['','','',false];
+      const festivo=!!entries[3];
+      const has=(entries[0]&&entries[0].trim()!=='')||(entries[1]&&entries[1].trim()!=='')||(entries[2]&&entries[2].trim()!=='')||festivo;
+      const body={day_key:k,slot0:entries[0]||'',slot1:entries[1]||'',slot2:entries[2]||'',festivo:festivo?'SI':'',action:has?'save':'delete',token:editToken};
+      try{
+        const res=await fetch(API_URL,{
+          method:'POST',
+          headers:{'Content-Type':'text/plain;charset=utf-8'}, // evita preflight CORS con Apps Script
+          body:JSON.stringify(body)
+        });
+        const data=await res.json();
+        if(!res.ok||data.ok===false) throw new Error(data.error||('HTTP '+res.status));
+        showSaved();
+      }catch(err){
+        console.error('Error guardando:',err);
+        showError('No se pudo guardar "'+k+'"');
+      }
+    }
+
+    function scheduleSave(k){clearTimeout(saveTimers[k]);saveTimers[k]=setTimeout(()=>saveEntry(k),1200);}
+    function getYear(){return parseInt(document.getElementById('year-input').value,10)||2026;}
+    function getStartMonth(){const val=document.getElementById('month-input').value;return val===''?8:parseInt(val,10);}
+
+    const container=document.getElementById('calendar-container');
+
+    container.addEventListener('input',(e)=>{
+      const t=e.target;if(!t.dataset.key)return;
+      if(!editUnlocked){t.value=(dayEntries[t.dataset.key]||['','','',false])[parseInt(t.dataset.slot)]||'';return;}
+      const k=t.dataset.key,slot=parseInt(t.dataset.slot);
+      if(!dayEntries[k])dayEntries[k]=['','','',false];
+      dayEntries[k][slot]=t.value;
+      updateMiniCalCell(k);scheduleSave(k);
+    });
+
+    container.addEventListener('change',(e)=>{
+      const t=e.target;if(!t.dataset.festivoKey)return;
+      if(!editUnlocked){t.checked=isFestivo(t.dataset.festivoKey);return;}
+      const k=t.dataset.festivoKey;
+      if(!dayEntries[k])dayEntries[k]=['','','',false];
+      dayEntries[k][3]=t.checked;
+      render();scheduleSave(k);
+    });
+
+    function updateMiniCalCell(k){
+      const cell=container.querySelector(`[data-scroll-key="${k}"]`);if(!cell)return;
+      const parts=k.split('/'),m=parseInt(parts[1]),p=monthColors[m];
+      const dow=dayOfWeek(parseInt(parts[0]),m,parseInt(parts[2]));
+      const isW=dow>=5,hc=hasContent(k),fest=isFestivo(k);
+      cell.style.background=fest?FESTIVO_BG:((isW||hc)?p.bg+'55':'transparent');
+      cell.style.color=fest?FESTIVO_FG:'';
+      cell.style.fontWeight=(hc||fest)?'bold':'';
+    }
+
+    container.addEventListener('click',(e)=>{
+      const t=e.target.closest('[data-scroll-key]')||e.target.closest('[data-month-preview]');
+      if(!t)return;
+      if(t.dataset.scrollKey){const inp=container.querySelector(`input[data-key="${t.dataset.scrollKey}"]`);if(inp){inp.scrollIntoView({behavior:'smooth',block:'center'});inp.focus();}}
+      else if(t.dataset.monthPreview!==undefined){openPreview(parseInt(t.dataset.monthPreview),parseInt(t.dataset.yearPreview));}
+    });
+
+    function render(){
+      const year=getYear(),sm=getStartMonth();
+      const focused=document.activeElement;
+      const fKey=focused&&focused.dataset?focused.dataset.key:null;
+      const fSlot=focused&&focused.dataset?focused.dataset.slot:null;
+      container.innerHTML='';
+      for(let idx=0;idx<12;idx++){
+        const m=(sm+idx)%12,dy=year+Math.floor((sm+idx)/12),p=monthColors[m],total=daysInMonth(dy,m),startDow=dayOfWeek(dy,m,1);
+        let h=`<div class="rounded-lg overflow-hidden border" style="border-color:${p.bg}">`;
+        h+=`<div class="px-3 py-2 text-center font-bold text-sm cursor-pointer hover:opacity-80" style="background:${p.bg};color:${p.fg}" data-month-preview="${m}" data-year-preview="${dy}">${MESES[m]} ${dy}</div>`;
+        h+=`<div class="cal-grid text-[11px] font-bold text-gray-500 bg-gray-100">`;
+        DIAS.forEach(d=>{h+=`<div class="text-center py-0.5">${d}</div>`;});
+        h+=`</div><div class="cal-grid text-[12px] text-gray-700">`;
+        for(let i=0;i<42;i++){
+          const dn=i-startDow+1;
+          if(dn<1||dn>total){h+=`<div></div>`;continue;}
+          const k=dayKey(dy,m,dn),dow=i%7,isW=dow>=5,hc=hasContent(k),fest=isFestivo(k);
+          const bg=fest?FESTIVO_BG:((isW||hc)?p.bg+'55':'transparent');
+          const fw=(hc||fest)?'font-weight:bold':'';
+          const fc=fest?`color:${FESTIVO_FG};`:'';
+          h+=`<div class="text-center py-0.5 cursor-pointer hover:opacity-70" style="background:${bg};${fw}${fc}" data-scroll-key="${k}">${dn}</div>`;
+        }
+        h+=`</div><div class="border-t text-[11px] max-h-48 overflow-y-auto" style="border-color:${p.bg}">`;
+        for(let d=1;d<=total;d++){
+          const dow=dayOfWeek(dy,m,d),k=dayKey(dy,m,d),entries=dayEntries[k]||['','','',false];
+          const fest=!!entries[3];
+          const rowBg=fest?FESTIVO_BG:(dow>=5?p.bg+'44':'transparent');
+          const labelColor=fest?FESTIVO_FG:p.fg;
+          h+=`<div class="border-b border-gray-100" style="background:${rowBg}">`;
+          h+=`<div class="flex items-center gap-1 px-1.5 py-0.5">`;
+          h+=`<input type="checkbox" ${fest?'checked':''} ${editUnlocked?'':'disabled'} data-festivo-key="${k}" title="Marcar como festivo" class="cursor-pointer">`;
+          h+=`<span class="font-bold text-[11px]" style="color:${labelColor}">${DIAS_FULL[dow]} ${d}${fest?' · Festivo':''}</span>`;
+          h+=`</div>`;
+          for(let s=0;s<3;s++)h+=`<input type="text" ${editUnlocked?'':'readonly'} class="w-full px-2 py-0.5 text-[11px] border-none ${editUnlocked?'bg-white':'bg-gray-50'} text-gray-800 focus:ring-1 focus:ring-blue-300" data-key="${k}" data-slot="${s}" placeholder="---" value="${esc(entries[s])}">`;
+          h+=`</div>`;
+        }
+        h+=`</div></div>`;
+        container.insertAdjacentHTML('beforeend',h);
+      }
+      if(fKey&&fSlot!==null){const inp=container.querySelector(`input[data-key="${fKey}"][data-slot="${fSlot}"]`);if(inp){inp.focus();const v=inp.value;inp.value='';inp.value=v;}}
+    }
+
+    function openPreview(m,y){
+      const p=monthColors[m],total=daysInMonth(y,m);
+      document.getElementById('preview-title').textContent=`${MESES[m]} ${y}`;
+      let h=`<table class="w-full border-collapse text-sm"><thead><tr style="background:${p.bg}"><th class="border px-3 py-2 text-left" style="color:${p.fg}">Fecha</th><th class="border px-3 py-2" style="color:${p.fg}">Slot 1</th><th class="border px-3 py-2" style="color:${p.fg}">Slot 2</th><th class="border px-3 py-2" style="color:${p.fg}">Slot 3</th></tr></thead><tbody>`;
+      for(let d=1;d<=total;d++){
+        const k=dayKey(y,m,d),entries=dayEntries[k]||['','','',false],fest=!!entries[3];
+        const hasText=(entries[0]&&entries[0].trim())||(entries[1]&&entries[1].trim())||(entries[2]&&entries[2].trim());
+        if(!hasText&&!fest)continue;
+        const dow=dayOfWeek(y,m,d);
+        const bg=fest?FESTIVO_BG:(dow>=5?p.bg+'22':'transparent');
+        const labelColor=fest?`style="color:${FESTIVO_FG}"`:'';
+        h+=`<tr style="background:${bg}"><td class="border px-3 py-2 font-medium" ${labelColor}>${DIAS_FULL[dow]} ${d}${fest?' · Festivo':''}</td>`;
+        for(let s=0;s<3;s++)h+=`<td class="border px-3 py-2">${esc(entries[s])}</td>`;
+        h+=`</tr>`;
+      }
+      h+=`</tbody></table>`;
+      document.getElementById('preview-content').innerHTML=h;
+      document.getElementById('preview-modal').classList.remove('hidden');
+    }
+
+    document.getElementById('close-preview').addEventListener('click',()=>document.getElementById('preview-modal').classList.add('hidden'));
+
+    function openFullPreview(){
+      const year=getYear(),sm=getStartMonth();
+      let h=`<div class="text-center mb-6"><h1 class="text-2xl font-bold" style="color:#001a72">Calendario Escolar ${year}-${year+1}</h1></div>`;
+      for(let idx=0;idx<12;idx++){
+        const m=(sm+idx)%12,dy=year+Math.floor((sm+idx)/12),p=monthColors[m],total=daysInMonth(dy,m);
+        h+=`<div class="mb-6 border rounded-lg overflow-hidden" style="border-color:${p.bg}"><div class="px-4 py-3 font-bold text-lg text-center" style="background:${p.bg};color:${p.fg}">${MESES[m]} ${dy}</div><table class="w-full border-collapse text-xs"><tbody>`;
+        for(let d=1;d<=total;d++){
+          const k=dayKey(dy,m,d),entries=dayEntries[k]||['','','',false],fest=!!entries[3];
+          const hasText=(entries[0]&&entries[0].trim())||(entries[1]&&entries[1].trim())||(entries[2]&&entries[2].trim());
+          if(!hasText&&!fest)continue;
+          const dow=dayOfWeek(dy,m,d);
+          const bg=fest?FESTIVO_BG:'transparent';
+          const labelColor=fest?`style="color:${FESTIVO_FG}"`:'';
+          h+=`<tr style="background:${bg}"><td class="border px-2 py-1 font-medium" ${labelColor}>${DIAS_FULL[dow]} ${d}${fest?' · Festivo':''}</td>`;
+          for(let s=0;s<3;s++)h+=`<td class="border px-2 py-1">${esc(entries[s])}</td>`;
+          h+=`</tr>`;
+        }
+        h+=`</tbody></table></div>`;
+      }
+      document.getElementById('full-preview-content').innerHTML=h;
+      document.getElementById('full-preview-modal').classList.remove('hidden');
+    }
+
+    document.getElementById('full-preview-btn').addEventListener('click',openFullPreview);
+    document.getElementById('close-full-preview').addEventListener('click',()=>document.getElementById('full-preview-modal').classList.add('hidden'));
+    document.getElementById('year-input').addEventListener('change',render);
+    document.getElementById('month-input').addEventListener('change',render);
+    document.getElementById('lock-btn').addEventListener('click',tryUnlock);
+
+    updateEditUI();
+    loadData();
+    tryRestoreSession();
+    lucide.createIcons();
+  </script>
+</body></html>
