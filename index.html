@@ -142,7 +142,13 @@
     function dayKey(y,m,d){return `${y}/${m}/${d}`;}
     function hasContent(k){const e=dayEntries[k];if(!e)return false;return !!((e[0]&&e[0].trim()!=='')||(e[1]&&e[1].trim()!=='')||(e[2]&&e[2].trim()!==''));}
     function isFestivo(k){const e=dayEntries[k];return !!(e&&e[3]);}
-    const FESTIVO_BG='#fca5a5', FESTIVO_FG='#7f1d1d';
+    function darken(hex,amount){
+      const h=hex.replace('#','');
+      const r=parseInt(h.substring(0,2),16),g=parseInt(h.substring(2,4),16),b=parseInt(h.substring(4,6),16);
+      const dr=Math.max(0,Math.round(r*(1-amount))),dg=Math.max(0,Math.round(g*(1-amount))),db=Math.max(0,Math.round(b*(1-amount)));
+      return `#${dr.toString(16).padStart(2,'0')}${dg.toString(16).padStart(2,'0')}${db.toString(16).padStart(2,'0')}`;
+    }
+    function festivoBg(m){return darken(monthColors[m].bg,0.35);}
     function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 
     function showSaved(){const el=document.getElementById('save-indicator');el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),1500);}
@@ -232,8 +238,8 @@
       const parts=k.split('/'),m=parseInt(parts[1]),p=monthColors[m];
       const dow=dayOfWeek(parseInt(parts[0]),m,parseInt(parts[2]));
       const isW=dow>=5,hc=hasContent(k),fest=isFestivo(k);
-      cell.style.background=fest?FESTIVO_BG:((isW||hc)?p.bg+'55':'transparent');
-      cell.style.color=fest?FESTIVO_FG:'';
+      cell.style.background=fest?festivoBg(m):((isW||hc)?p.bg+'55':'transparent');
+      cell.style.color=fest?p.fg:'';
       cell.style.fontWeight=(hc||fest)?'bold':'';
     }
 
@@ -261,17 +267,17 @@
           const dn=i-startDow+1;
           if(dn<1||dn>total){h+=`<div></div>`;continue;}
           const k=dayKey(dy,m,dn),dow=i%7,isW=dow>=5,hc=hasContent(k),fest=isFestivo(k);
-          const bg=fest?FESTIVO_BG:((isW||hc)?p.bg+'55':'transparent');
+          const bg=fest?festivoBg(m):((isW||hc)?p.bg+'55':'transparent');
           const fw=(hc||fest)?'font-weight:bold':'';
-          const fc=fest?`color:${FESTIVO_FG};`:'';
+          const fc=fest?`color:${p.fg};`:'';
           h+=`<div class="text-center py-0.5 cursor-pointer hover:opacity-70" style="background:${bg};${fw}${fc}" data-scroll-key="${k}">${dn}</div>`;
         }
         h+=`</div><div class="border-t text-[11px] max-h-48 overflow-y-auto" style="border-color:${p.bg}">`;
         for(let d=1;d<=total;d++){
           const dow=dayOfWeek(dy,m,d),k=dayKey(dy,m,d),entries=dayEntries[k]||['','','',false];
           const fest=!!entries[3];
-          const rowBg=fest?FESTIVO_BG:(dow>=5?p.bg+'44':'transparent');
-          const labelColor=fest?FESTIVO_FG:p.fg;
+          const rowBg=fest?festivoBg(m):(dow>=5?p.bg+'44':'transparent');
+          const labelColor=p.fg;
           h+=`<div class="border-b border-gray-100" style="background:${rowBg}">`;
           h+=`<div class="flex items-center gap-1 px-1.5 py-0.5">`;
           h+=`<input type="checkbox" ${fest?'checked':''} ${editUnlocked?'':'disabled'} data-festivo-key="${k}" title="Marcar como festivo" class="cursor-pointer">`;
@@ -295,8 +301,8 @@
         const hasText=(entries[0]&&entries[0].trim())||(entries[1]&&entries[1].trim())||(entries[2]&&entries[2].trim());
         if(!hasText&&!fest)continue;
         const dow=dayOfWeek(y,m,d);
-        const bg=fest?FESTIVO_BG:(dow>=5?p.bg+'22':'transparent');
-        const labelColor=fest?`style="color:${FESTIVO_FG}"`:'';
+        const bg=fest?festivoBg(m):(dow>=5?p.bg+'22':'transparent');
+        const labelColor=fest?`style="color:${p.fg}"`:'';
         h+=`<tr style="background:${bg}"><td class="border px-3 py-2 font-medium" ${labelColor}>${DIAS_FULL[dow]} ${d}${fest?' · Festivo':''}</td>`;
         for(let s=0;s<3;s++)h+=`<td class="border px-3 py-2">${esc(entries[s])}</td>`;
         h+=`</tr>`;
@@ -319,8 +325,8 @@
           const hasText=(entries[0]&&entries[0].trim())||(entries[1]&&entries[1].trim())||(entries[2]&&entries[2].trim());
           if(!hasText&&!fest)continue;
           const dow=dayOfWeek(dy,m,d);
-          const bg=fest?FESTIVO_BG:'transparent';
-          const labelColor=fest?`style="color:${FESTIVO_FG}"`:'';
+          const bg=fest?festivoBg(m):'transparent';
+          const labelColor=fest?`style="color:${p.fg}"`:'';
           h+=`<tr style="background:${bg}"><td class="border px-2 py-1 font-medium" ${labelColor}>${DIAS_FULL[dow]} ${d}${fest?' · Festivo':''}</td>`;
           for(let s=0;s<3;s++)h+=`<td class="border px-2 py-1">${esc(entries[s])}</td>`;
           h+=`</tr>`;
