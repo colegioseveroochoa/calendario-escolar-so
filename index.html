@@ -148,7 +148,7 @@
       const dr=Math.max(0,Math.round(r*(1-amount))),dg=Math.max(0,Math.round(g*(1-amount))),db=Math.max(0,Math.round(b*(1-amount)));
       return `#${dr.toString(16).padStart(2,'0')}${dg.toString(16).padStart(2,'0')}${db.toString(16).padStart(2,'0')}`;
     }
-    function festivoBg(m){return darken(monthColors[m].bg,0.35);}
+    function festivoBg(m){return darken(monthColors[m].bg,0.25);}
     function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 
     function showSaved(){const el=document.getElementById('save-indicator');el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),1500);}
