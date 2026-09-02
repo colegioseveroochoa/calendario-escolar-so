@@ -23,6 +23,13 @@
    <h1 class="canva-text font-bold" style="color: rgb(0, 26, 114); font-weight: 700; font-style: normal; font-size: 21px;">Calendario Escolar: Curso 2026/2027<br>Cooperativa de Enseñanza Severo Ochoa</h1>
    <div class="flex items-center gap-3 flex-wrap">
     <div class="flex items-center gap-2">
+     <label for="nivel-select" class="text-sm font-medium text-gray-700">Etapa:</label>
+     <select id="nivel-select" class="px-3 py-1.5 text-sm font-medium border-2 border-gray-300 rounded-lg bg-white text-gray-800">
+      <option value="secundaria" selected>Secundaria, Bachillerato y Ciclos</option>
+      <option value="primaria">Infantil y Primaria</option>
+     </select>
+    </div>
+    <div class="flex items-center gap-2">
      <label for="year-input" class="text-sm font-medium text-gray-700">Año:</label><input id="year-input" type="number" value="2026" min="1900" max="2100" disabled class="w-20 px-3 py-1.5 text-sm font-bold text-center border-2 border-gray-300 rounded-lg bg-gray-100 text-gray-800">
     </div>
     <div class="flex items-center gap-2">
@@ -74,6 +81,7 @@
     const saveTimers={};
     let editUnlocked=false;
     let editToken=null;
+    let currentNivel='secundaria';
 
     function updateEditUI(){
       const yearInp=document.getElementById('year-input');
@@ -169,7 +177,7 @@
 
     async function loadData(){
       try{
-        const res=await fetch(API_URL,{method:'GET'});
+        const res=await fetch(API_URL+'?nivel='+currentNivel,{method:'GET'});
         if(!res.ok) throw new Error('HTTP '+res.status);
         const records=await res.json();
         const newEntries={};
@@ -193,7 +201,7 @@
       const entries=dayEntries[k]||['','','',false];
       const festivo=!!entries[3];
       const has=(entries[0]&&entries[0].trim()!=='')||(entries[1]&&entries[1].trim()!=='')||(entries[2]&&entries[2].trim()!=='')||festivo;
-      const body={day_key:k,slot0:entries[0]||'',slot1:entries[1]||'',slot2:entries[2]||'',festivo:festivo?'SI':'',action:has?'save':'delete',token:editToken};
+      const body={day_key:k,slot0:entries[0]||'',slot1:entries[1]||'',slot2:entries[2]||'',festivo:festivo?'SI':'',action:has?'save':'delete',token:editToken,nivel:currentNivel};
       try{
         const res=await fetch(API_URL,{
           method:'POST',
@@ -314,9 +322,13 @@
 
     document.getElementById('close-preview').addEventListener('click',()=>document.getElementById('preview-modal').classList.add('hidden'));
 
+    function nivelLabel(){
+      return currentNivel==='primaria'?'Infantil y Primaria':'Secundaria, Bachillerato y Ciclos';
+    }
+
     function openFullPreview(){
       const year=getYear(),sm=getStartMonth();
-      let h=`<div class="text-center mb-6"><h1 class="text-2xl font-bold" style="color:#001a72">Calendario Escolar ${year}-${year+1}</h1></div>`;
+      let h=`<div class="text-center mb-6"><h1 class="text-2xl font-bold" style="color:#001a72">Calendario Escolar ${year}-${year+1}</h1><p class="text-sm text-gray-500">${nivelLabel()}</p></div>`;
       for(let idx=0;idx<12;idx++){
         const m=(sm+idx)%12,dy=year+Math.floor((sm+idx)/12),p=monthColors[m],total=daysInMonth(dy,m);
         h+=`<div class="mb-6 border rounded-lg overflow-hidden" style="border-color:${p.bg}"><div class="px-4 py-3 font-bold text-lg text-center" style="background:${p.bg};color:${p.fg}">${MESES[m]} ${dy}</div><table class="w-full border-collapse text-xs"><tbody>`;
@@ -342,6 +354,13 @@
     document.getElementById('year-input').addEventListener('change',render);
     document.getElementById('month-input').addEventListener('change',render);
     document.getElementById('lock-btn').addEventListener('click',tryUnlock);
+    document.getElementById('nivel-select').addEventListener('change',(e)=>{
+      currentNivel=e.target.value;
+      dayEntries={};
+      document.getElementById('load-indicator').classList.remove('hidden');
+      render();
+      loadData();
+    });
     document.getElementById('pdf-preview-btn').addEventListener('click',()=>window.print());
     document.getElementById('pdf-full-btn').addEventListener('click',()=>window.print());
 
