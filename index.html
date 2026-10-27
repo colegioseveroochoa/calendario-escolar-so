@@ -82,6 +82,44 @@
     let editUnlocked=false;
     let editToken=null;
     let currentNivel='secundaria';
+    let daySched={};
+
+    // ==== LUGARES (recursos de Workspace) ====
+    const LUGARES=[
+      {key:'aula45',label:'Aula 45 (Informática)'},
+      {key:'salon_actos',label:'Salón de Actos (Secundaria)'},
+      {key:'biblioteca',label:'Biblioteca Antonio Ramírez (Secundaria)'},
+      {key:'pabellon',label:'Pabellón'},
+      {key:'pista_primaria',label:'Pista polideportiva (Primaria)'},
+      {key:'pista_secundaria',label:'Pista polideportiva (Secundaria)'}
+    ];
+    function lugarLabel(key){const l=LUGARES.find(x=>x.key===key);return l?l.label:'';}
+    function emptySched(){return [{l:'',i:'',f:''},{l:'',i:'',f:''},{l:'',i:'',f:''}];}
+    function getSched(k){return daySched[k]||emptySched();}
+    function normTime(v){const m=String(v||'').match(/(\d{1,2}):(\d{2})/);return m?String(m[1]).padStart(2,'0')+':'+m[2]:'';}
+    function schedSummary(sc){
+      const parts=[];
+      if(sc.l)parts.push('📍 '+lugarLabel(sc.l));
+      if(sc.i&&sc.f)parts.push((sc.l?'':'🕒 ')+sc.i+'–'+sc.f);
+      return parts.join(' · ');
+    }
+    function validateDay(k){
+      const e=dayEntries[k]||['','','',false];
+      const sc=getSched(k);
+      for(let s=0;s<3;s++){
+        const text=(e[s]||'').trim(),x=sc[s],n=s+1;
+        if(!x.l&&!x.i&&!x.f)continue;
+        if(!text)return `Anotación ${n}: escribe el texto antes de añadir lugar u horas.`;
+        if(!x.i||!x.f)return `Anotación ${n}: indica la hora de inicio y la de fin.`;
+        if(x.i>=x.f)return `Anotación ${n}: la hora de fin debe ser posterior a la de inicio.`;
+      }
+      return '';
+    }
+    function cellHtml(k,s,entries){
+      const txt=esc(entries[s]);
+      const sum=schedSummary(getSched(k)[s]);
+      return sum?`${txt}<div class="text-[11px] text-gray-500">${esc(sum)}</div>`:txt;
+    }
 
     function updateEditUI(){
       const yearInp=document.getElementById('year-input');
@@ -159,7 +197,7 @@
     function festivoBg(m){return darken(monthColors[m].bg,0.15);}
     function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 
-    function showSaved(){const el=document.getElementById('save-indicator');el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),1500);}
+    function showSaved(){document.getElementById('error-indicator').classList.add('hidden');const el=document.getElementById('save-indicator');el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),1500);}
     function showError(msg){const el=document.getElementById('error-indicator');el.textContent='⚠ '+msg;el.classList.remove('hidden');}
     function hideLoading(){document.getElementById('load-indicator').classList.add('hidden');}
 
@@ -180,12 +218,15 @@
         const res=await fetch(API_URL+'?nivel='+currentNivel,{method:'GET'});
         if(!res.ok) throw new Error('HTTP '+res.status);
         const records=await res.json();
-        const newEntries={};
+        const newEntries={},newSched={};
         records.forEach(rec=>{
           const k=normalizeDayKey(rec.day_key);
-          if(k) newEntries[k]=[rec.slot0||'',rec.slot1||'',rec.slot2||'',rec.festivo==='SI'];
+          if(k){
+            newEntries[k]=[rec.slot0||'',rec.slot1||'',rec.slot2||'',rec.festivo==='SI'];
+            newSched[k]=[0,1,2].map(s=>({l:String(rec['lugar'+s]||'').trim(),i:normTime(rec['ini'+s]),f:normTime(rec['fin'+s])}));
+          }
         });
-        dayEntries=newEntries;
+        dayEntries=newEntries;daySched=newSched;
         hideLoading();
         render();
       }catch(err){
@@ -200,8 +241,12 @@
       if(!editUnlocked)return; // salvaguarda extra: sin desbloquear, no se envía nada
       const entries=dayEntries[k]||['','','',false];
       const festivo=!!entries[3];
+      const sc=getSched(k);
       const has=(entries[0]&&entries[0].trim()!=='')||(entries[1]&&entries[1].trim()!=='')||(entries[2]&&entries[2].trim()!=='')||festivo;
+      const problem=validateDay(k);
+      if(problem){showError(problem);return;} // no se envía nada hasta que los datos estén completos
       const body={day_key:k,slot0:entries[0]||'',slot1:entries[1]||'',slot2:entries[2]||'',festivo:festivo?'SI':'',action:has?'save':'delete',token:editToken,nivel:currentNivel};
+      for(let s=0;s<3;s++){body['lugar'+s]=sc[s].l;body['ini'+s]=sc[s].i;body['fin'+s]=sc[s].f;}
       try{
         const res=await fetch(API_URL,{
           method:'POST',
@@ -209,7 +254,13 @@
           body:JSON.stringify(body)
         });
         const data=await res.json();
-        if(!res.ok||data.ok===false) throw new Error(data.error||('HTTP '+res.status));
+        if(data.ok===false){
+          const msg=data.error||'No se pudo guardar';
+          showError(msg);
+          alert('No se ha guardado ('+k.split('/')[2]+'/'+(parseInt(k.split('/')[1],10)+1)+'/'+k.split('/')[0]+'):\n\n'+msg);
+          return;
+        }
+        if(!res.ok) throw new Error('HTTP '+res.status);
         showSaved();
       }catch(err){
         console.error('Error guardando:',err);
@@ -229,7 +280,25 @@
       const k=t.dataset.key,slot=parseInt(t.dataset.slot);
       if(!dayEntries[k])dayEntries[k]=['','','',false];
       dayEntries[k][slot]=t.value;
+      const row=container.querySelector(`[data-sched-row="${k}|${slot}"]`);
+      if(row){
+        const hasTxt=t.value.trim()!=='';
+        row.classList.toggle('hidden',!hasTxt);
+        if(!hasTxt){
+          if(daySched[k])daySched[k][slot]={l:'',i:'',f:''};
+          row.querySelectorAll('[data-sfield]').forEach(c=>{c.value='';});
+        }
+      }
       updateMiniCalCell(k);scheduleSave(k);
+    });
+
+    container.addEventListener('change',(e)=>{
+      const t=e.target;if(!t.dataset.sfield)return;
+      const k=t.dataset.skey,sl=parseInt(t.dataset.sslot),f=t.dataset.sfield;
+      if(!editUnlocked){t.value=(getSched(k)[sl]||{})[f]||'';return;}
+      if(!daySched[k])daySched[k]=emptySched();
+      daySched[k][sl][f]=t.value;
+      scheduleSave(k);
     });
 
     container.addEventListener('change',(e)=>{
@@ -291,7 +360,22 @@
           h+=`<input type="checkbox" ${fest?'checked':''} ${editUnlocked?'':'disabled'} data-festivo-key="${k}" title="Marcar como festivo" class="cursor-pointer">`;
           h+=`<span class="font-bold text-[11px]" style="color:${labelColor}">${DIAS_FULL[dow]} ${d}${fest?' · Festivo':''}</span>`;
           h+=`</div>`;
-          for(let s=0;s<3;s++)h+=`<input type="text" ${editUnlocked?'':'readonly'} class="w-full px-2 py-0.5 text-[11px] border-none ${editUnlocked?'bg-white':'bg-gray-50'} text-gray-800 focus:ring-1 focus:ring-blue-300" data-key="${k}" data-slot="${s}" placeholder="---" value="${esc(entries[s])}">`;
+          for(let s=0;s<3;s++){
+            h+=`<input type="text" ${editUnlocked?'':'readonly'} class="w-full px-2 py-0.5 text-[11px] border-none ${editUnlocked?'bg-white':'bg-gray-50'} text-gray-800 focus:ring-1 focus:ring-blue-300" data-key="${k}" data-slot="${s}" placeholder="---" value="${esc(entries[s])}">`;
+            const sc=getSched(k)[s];
+            if(editUnlocked){
+              const hasTxt=(entries[s]||'').trim()!=='';
+              const attrs=`data-skey="${k}" data-sslot="${s}"`;
+              h+=`<div data-sched-row="${k}|${s}" class="flex items-center gap-1 px-2 pb-0.5 ${hasTxt?'':'hidden'}">`;
+              h+=`<select ${attrs} data-sfield="l" class="text-[10px] border border-gray-200 rounded bg-white text-gray-700" style="max-width:46%"><option value="">Sin lugar</option>${LUGARES.map(x=>`<option value="${x.key}" ${sc.l===x.key?'selected':''}>${esc(x.label)}</option>`).join('')}</select>`;
+              h+=`<input type="time" ${attrs} data-sfield="i" value="${sc.i}" title="Hora de inicio" class="text-[10px] border border-gray-200 rounded bg-white text-gray-700" style="width:72px">`;
+              h+=`<input type="time" ${attrs} data-sfield="f" value="${sc.f}" title="Hora de fin" class="text-[10px] border border-gray-200 rounded bg-white text-gray-700" style="width:72px">`;
+              h+=`</div>`;
+            }else{
+              const sum=schedSummary(sc);
+              if(sum)h+=`<div class="px-2 pb-0.5 text-[10px] text-gray-600">${esc(sum)}</div>`;
+            }
+          }
           h+=`</div>`;
         }
         h+=`</div></div>`;
@@ -312,7 +396,7 @@
         const bg=fest?festivoBg(m):(dow>=5?p.bg+'22':'transparent');
         const labelColor=fest?`style="color:${p.fg}"`:'';
         h+=`<tr style="background:${bg}"><td class="border px-3 py-2 font-medium" ${labelColor}>${DIAS_FULL[dow]} ${d}${fest?' · Festivo':''}</td>`;
-        for(let s=0;s<3;s++)h+=`<td class="border px-3 py-2">${esc(entries[s])}</td>`;
+        for(let s=0;s<3;s++)h+=`<td class="border px-3 py-2">${cellHtml(k,s,entries)}</td>`;
         h+=`</tr>`;
       }
       h+=`</tbody></table>`;
@@ -340,7 +424,7 @@
           const bg=fest?festivoBg(m):'transparent';
           const labelColor=fest?`style="color:${p.fg}"`:'';
           h+=`<tr style="background:${bg}"><td class="border px-2 py-1 font-medium" ${labelColor}>${DIAS_FULL[dow]} ${d}${fest?' · Festivo':''}</td>`;
-          for(let s=0;s<3;s++)h+=`<td class="border px-2 py-1">${esc(entries[s])}</td>`;
+          for(let s=0;s<3;s++)h+=`<td class="border px-2 py-1">${cellHtml(dayKey(dy,m,d),s,entries)}</td>`;
           h+=`</tr>`;
         }
         h+=`</tbody></table></div>`;
@@ -356,7 +440,7 @@
     document.getElementById('lock-btn').addEventListener('click',tryUnlock);
     document.getElementById('nivel-select').addEventListener('change',(e)=>{
       currentNivel=e.target.value;
-      dayEntries={};
+      dayEntries={};daySched={};
       document.getElementById('load-indicator').classList.remove('hidden');
       render();
       loadData();
